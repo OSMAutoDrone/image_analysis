@@ -8,7 +8,7 @@ img2 = cv2.imread("../img/abberations/img1/gaussianNoise.png", cv2.IMREAD_GRAYSC
 
 
 # Fonction pour extraire la moyenne des hautes fréquences
-def high_freq_mean(img_path, cutoff=30):
+def high_freq_mean(img_path, cutoff=0):
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     f = np.fft.fft2(img)
     fshift = np.fft.fftshift(f)
