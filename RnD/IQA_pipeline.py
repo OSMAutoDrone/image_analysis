@@ -6,24 +6,25 @@ import numpy as np
 from noise_detection_test import high_freq_mean
 
 if __name__ == "__main__":
-    # Calcul des moyennes
     results = {}
-    for d, r, f in os.walk("../img/abberations/img1"):
+    for d, r, f in os.walk(f'../img/random/'):
         for filename in f:
-            name = filename.replace(".png","_1")
-            results[name] = high_freq_mean(os.path.join(d, filename))
-    sorted_results = {k: v for k, v in sorted(results.items(), key=lambda item: item[1])}
+            img = Image.open(os.path.join(d, filename))
+            name = filename.replace(".jpg", f"")
+            Exposition_score = computeMeanLuminosity(os.path.join(d, filename))
+            if Exposition_score > 160:
+                results[name] = "over-exposed"
+                continue
+            if Exposition_score < 70:
+                results[name] = "under-exposed"
+                continue
+            ndarray = np.asarray(img)
+            obj = BRISQUE(url=False)
+            score = obj.score(img=ndarray)
+            if score > 30:
+                results[name] = "blurry or noisy"
+                continue
 
-    for row in sorted_results:
-        print(f"Frequency mean {row}: {sorted_results[row]}")
-    results = {}
-    print('')
 
-    for d, r, f in os.walk("../img/abberations/img2"):
-        for filename in f:
-            name = filename.replace(".png", "_2")
-            results[name] = high_freq_mean(os.path.join(d, filename))
-
-    sorted_results = {k: v for k, v in sorted(results.items(), key=lambda item: item[1])}
-    for row in sorted_results:
-        print(f"Frequency mean {row}: {sorted_results[row]}")
+    for row in results:
+        print(f"{row}: {results[row]}")

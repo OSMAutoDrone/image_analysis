@@ -1,0 +1,106 @@
+<mxfile host="app.diagrams.net" agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36" version="27.0.9">
+  <diagram name="Page-1" id="p_Wgntsxyk8Eu4eA6bzl">
+    <mxGraphModel dx="1426" dy="1912" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+      <root>
+        <mxCell id="0" />
+        <mxCell id="1" parent="0" />
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-2" value="Image en entrée (nous)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="150" y="320" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-3" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="wRhiRbBeXMtbN0EerKrc-2">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="390" y="480" as="sourcePoint" />
+            <mxPoint x="310" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-5" value="Data de OSM (images + coordonnées associées)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="1">
+          <mxGeometry x="295" y="20" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-6" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="wRhiRbBeXMtbN0EerKrc-5">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="320" y="260" as="sourcePoint" />
+            <mxPoint x="370" y="120" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-8" value="Entraînement d&#39;un CNN ou ViT avec comme entrée les images et sortie les coordonnées" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="240" y="120" width="260" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-9" value="Annotation des points d&#39;intérêts avec le modèle" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="1">
+          <mxGeometry x="310" y="320" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-11" value="Modèle PERDOUdeS" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="1">
+          <mxGeometry x="290" y="210" width="160" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-12" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="1" source="wRhiRbBeXMtbN0EerKrc-8">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="320" y="260" as="sourcePoint" />
+            <mxPoint x="370" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-13" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="1" source="wRhiRbBeXMtbN0EerKrc-11" target="wRhiRbBeXMtbN0EerKrc-9">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="320" y="260" as="sourcePoint" />
+            <mxPoint x="370" y="210" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-14" value="Entraînement" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="180" y="-20" width="380" height="280" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-24" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;" edge="1" parent="1" source="wRhiRbBeXMtbN0EerKrc-9">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="320" y="360" as="sourcePoint" />
+            <mxPoint x="470" y="350" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-22" value="Annotation et comparaison" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="130" y="280" width="490" height="350" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-16" value="Comparaisons des données (Modèle mathématique ou régresseur linéaire)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-22">
+          <mxGeometry x="340" y="180" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-18" value="Data de OSM (coordonnées de la zone d&#39;intérêt)" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-22">
+          <mxGeometry x="20" y="180" width="150" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-20" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" edge="1" parent="wRhiRbBeXMtbN0EerKrc-22" source="wRhiRbBeXMtbN0EerKrc-16" target="wRhiRbBeXMtbN0EerKrc-21">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="180" y="120" as="sourcePoint" />
+            <mxPoint x="400" y="300" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-21" value="Score de changement et/ou recommandations utilisateur&amp;nbsp;" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-22">
+          <mxGeometry x="340" y="270" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-25" value="Coordonnées associées à l&#39;image" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-22">
+          <mxGeometry x="340" y="40" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-28" value="" style="endArrow=classic;html=1;rounded=0;exitX=0.5;exitY=1;exitDx=0;exitDy=0;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" edge="1" parent="wRhiRbBeXMtbN0EerKrc-22" source="wRhiRbBeXMtbN0EerKrc-25" target="wRhiRbBeXMtbN0EerKrc-16">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="190" y="80" as="sourcePoint" />
+            <mxPoint x="240" y="30" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-29" value="" style="endArrow=classic;html=1;rounded=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="wRhiRbBeXMtbN0EerKrc-22" source="wRhiRbBeXMtbN0EerKrc-18" target="wRhiRbBeXMtbN0EerKrc-16">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="190" y="80" as="sourcePoint" />
+            <mxPoint x="240" y="30" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-31" value="Légende" style="swimlane;whiteSpace=wrap;html=1;" vertex="1" parent="1">
+          <mxGeometry x="570" y="30" width="160" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-32" value="Donnée d&#39;OSM" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#e1d5e7;strokeColor=#9673a6;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-31">
+          <mxGeometry x="20" y="40" width="120" height="20" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-33" value="Éléments nous appartenants" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#dae8fc;strokeColor=#6c8ebf;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-31">
+          <mxGeometry x="20" y="70" width="120" height="40" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-34" value="Éléments en sortie" style="rounded=0;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-31">
+          <mxGeometry x="20" y="120" width="120" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="wRhiRbBeXMtbN0EerKrc-35" value="Scripts" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#d5e8d4;strokeColor=#82b366;" vertex="1" parent="wRhiRbBeXMtbN0EerKrc-31">
+          <mxGeometry x="20" y="160" width="120" height="30" as="geometry" />
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
