@@ -1,0 +1,21 @@
+## A big thank you to our La Ruche contributors:
+- Michel Bilodeau
+- Élizabeth Harnois
+- La menuiserie des Pins Ltée
+- Stephane Lemieux
+- Carrière Familly
+- Dean Di Maulo
+- Lara Giusti
+- Edda Giusti
+- Thomas Martel
+- Samuel Carriere
+- Lise Janelle
+- Carole Suzie Carrière
+- Rénald L'Archevêque
+- Christine Bilodeau
+- Salomé Sabatié
+- Maryse Bresse
+- Pierre Bombardier
+- Bruno Emard
+- Christine Bertrand
+- Sarah Janelle-Bombardier
