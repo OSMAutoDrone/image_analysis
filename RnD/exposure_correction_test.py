@@ -3,7 +3,7 @@ import numpy as np
 from matplotlib import pyplot as plt
 from PIL import Image
 
-req = Image.open("C:/Users/ti-da\OneDrive\Documents\PMC\image_analysis\img/abberations/img1/overexposed.png")
+req = Image.open("E:/Perdoudes/image_analysis/img/abberations/img2/overexposed.png")
 img = np.asarray(req)
 
 

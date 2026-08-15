@@ -7,7 +7,7 @@ from noise_detection_test import high_freq_mean
 
 if __name__ == "__main__":
     results = {}
-    for d, r, f in os.walk(f'../img/random/'):
+    for d, r, f in os.walk(f'img/random/'):
         for filename in f:
             img = Image.open(os.path.join(d, filename))
             name = filename.replace(".jpg", f"")
