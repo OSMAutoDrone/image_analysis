@@ -1,0 +1,298 @@
+================================================================================
+NOTES D'ANALYSE — PIPELINE IQA
+Etat au 2026-09-10. Toutes les mesures portent sur le jeu OSM
+(../AI_analysis/data/base/osm/img, 198 images aeriennes) sauf mention contraire.
+================================================================================
+
+
+--------------------------------------------------------------------------------
+1. BRISQUE EST HORS DE SON DOMAINE SUR CE JEU   [le plus structurant]
+--------------------------------------------------------------------------------
+Sur 40 images SOURCES, vierges de tout defaut :
+
+    BRISQUE   median 21.2   p10 10.0   p90 40.8
+    28 % depassent deja 30 sans le moindre defaut applique.
+
+BRISQUE est un modele NSS (statistiques de coefficients MSCN) calibre sur des
+photographies naturelles. La texture de vegetation vue du dessus s'ecarte de ce
+modele. Consequence directe : une partie de ce qu'on lit comme un echec de
+correction est un plancher que meme l'image parfaite ne franchit pas.
+
+C'est aussi un risque de biais pour tout le protocole de test : BRISQUE sert a
+la fois de detecteur ET de critere de reussite. S'il est mal calibre sur le
+domaine, il fausse les deux bouts de la mesure.
+
+ACTION FAITE : BRISQUE_THRESHOLD releve de 30 a 42 (juste au-dessus du p90 des
+sources vierges, donc ~90 % d'entre elles passent).
+A FAIRE : vraie etude statistique de la reponse de BRISQUE sur ce domaine.
+Le chiffre 42 repose sur n=40, c'est provisoire.
+
+EFFET DE BORD DU RELEVEMENT, a garder en tete pour lire le test :
+les images bruitees degradees ont un BRISQUE de p10 30.9 / med 45.5 / p90 53.2.
+Avec un seuil a 42, une part notable des images bruitees ne sera plus flaguee
+du tout. On echange des faux positifs sur les images propres contre des faux
+negatifs sur le bruit. Les images floues, elles, restent largement au-dessus
+(p10 49.7 / med 63.4), donc la detection du flou n'est pas affectee.
+
+
+--------------------------------------------------------------------------------
+2. LA CASCADE FREQUENCE SE DETRUISAIT ELLE-MEME   [CORRIGE]
+--------------------------------------------------------------------------------
+L'ancien correct_frequency appliquait toujours le sharpen PUIS la moyenne 3x3,
+en chainant sur l'image deja modifiee. Mesure :
+
+    image             degradee   +sharpen   +sharpen+moyenne
+    img_134_blur        65.7       41.0          64.4
+    img_149_blur        49.6       39.2          47.4
+    img_07_noise        40.9       91.3          16.5
+
+Sur une image floue, la moyenne annule integralement le gain du sharpen.
+Sur une image bruitee, le sharpen amplifie le bruit et DOUBLE le score avant
+que la moyenne ne rattrape. Dans les deux sens, la premiere etape etait perdue
+ou nuisible.
+
+ACTION FAITE : les deux corrections repartent maintenant de l'image d'origine,
+et une seule des deux est retenue. Un seul tag decrit donc l'image sortante.
+Budget BRISQUE : 2 passes sur presque toutes les images (entree + resultat du
+sharpen), une 3e uniquement sur celles qui echouent deux fois, pour trancher la
+branche bruit.
+
+
+--------------------------------------------------------------------------------
+2 bis. LA CORRECTION D'EXPOSITION DEPASSAIT LA CIBLE   [CORRIGE]
+--------------------------------------------------------------------------------
+L'ancienne formule de gain, factor = (255 - mean) / 127.5, n'est exacte qu'au
+point fixe (mean = 127.5). Ailleurs elle depasse, et d'autant plus qu'on s'en
+eloigne. Pour amener une moyenne m sur une cible t, le gain juste est t/m ;
+a m = 225 l'ancienne formule appliquait 0.236 la ou il fallait 0.511.
+
+Trace reelle sur img_147_overexposed.jpg, plage [70,160] :
+
+    passe      mean   facteur   chroma
+    depart    224.9       -      11.15
+    1          53.0     0.236     3.37   -> tag overexposed_corrected
+    2          83.9     1.584     4.94   -> tag underexposed_corrected
+
+La passe 1 saute par-dessus toute la plage et atterrit en sous-exposition ; la
+passe 2 remonte. D'ou une image portant les DEUX tags opposes, plus un tag
+undersaturated puisque la chroma est passee sous SAT_LOW au passage.
+
+Mesure sur les 56 images a defaut d'exposition du banc :
+
+    formule                    dans la plage en 1 passe   chroma sortie < 6
+    (255 - mean) / 127.5              33 / 56                  17 / 56
+    EXP_TARGET / mean                 56 / 56                   5 / 56
+
+ACTION FAITE : factor = clip(EXP_TARGET / mean, 0.2, 5.0), applique via
+cv2.convertScaleAbs au lieu du noyau identite passe a filter2D (meme resultat,
+beaucoup moins d'operations). EXP_MAX_PASSES = 3 est conserve comme garde-fou :
+en eclaircissant, l'ecretage peut encore empecher la moyenne d'atteindre la
+cible du premier coup.
+
+
+--------------------------------------------------------------------------------
+3. FLOU ET BRUIT SONT TRIVIALEMENT SEPARABLES   [CORRIGE - f_detect]
+--------------------------------------------------------------------------------
+BRISQUE dit "degrade", jamais "degrade comment". Deux indicateurs tres simples
+suffisent pourtant. Variance du laplacien et estimateur de bruit d'Immerkaer,
+medianes et [p10-p90] par classe :
+
+    classe            var. laplacien        sigma bruit
+    blur                10 [    4 -    33]   0.31 [0.28 - 0.36]
+    clean              351 [  111 -   917]   1.21 [0.62 - 2.25]
+    noise             3572 [ 1548 -  6012]  12.83 [8.15 - 16.26]
+    overexposed        971 [  374 -  2142]   2.16 [1.08 - 3.53]
+    underexposed        84 [   28 -   125]   0.76 [0.40 - 0.98]
+
+Deux a trois ordres de grandeur d'ecart, sans recouvrement entre blur et noise.
+Un simple seuillage sur ces deux quantites discrimine ce que BRISQUE ne
+discriminera jamais, et remplacerait l'essai-erreur actuel par une detection.
+
+Immerkaer : convolution par [[1,-2,1],[-2,4,-2],[1,-2,1]], puis
+    sigma = sqrt(pi/2) * somme(|conv|) / (6 * (W-2) * (H-2))
+
+ATTENTION : ces deux indicateurs dependent de l'exposition. Les sous-exposees
+sont a var.lap 84 [28-125], donc dans la zone du flou. Un detecteur de flou par
+gradient classera des images sombres comme floues tant que l'exposition n'est
+pas normalisee AVANT. Voir section 6.
+
+
+--------------------------------------------------------------------------------
+4. LE NON-LOCAL MEANS ECRASE LE BRUIT   [piste, non implemente]
+--------------------------------------------------------------------------------
+BRISQUE median sur 20 images bruitees, selon le debruiteur :
+
+    degradee, avant correction        45.5   [p10 30.9 - p90 53.2]
+    moyenne 3x3 (actuel)              36.3   [    30.1 -     42.4]
+    filtre bilateral                  28.5   [    13.1 -     36.9]
+    non-local means                   11.5   [    -5.2 -     31.8]
+
+cv2.fastNlMeansDenoisingColored(img, None, 7, 7, 7, 21) — une ligne.
+Passe le bruit de "a peine sous le seuil" a "largement sous le seuil".
+Plus lent que la moyenne 3x3, mais applique une seule fois par image.
+
+
+--------------------------------------------------------------------------------
+5. LE FLOU RESTE PLAFONNE   [limite de fond]
+--------------------------------------------------------------------------------
+BRISQUE median sur 20 images floutees :
+
+    degradee, avant correction        63.4
+    noyau sharpen 3x3 (actuel)        40.1
+    unsharp mask gaussien             63.1   (n'aide pas du tout ici)
+
+Le sharpen actuel gagne 23 points, ce qui n'est pas rien — et avec le seuil a
+42 il fait desormais passer une part des images floues, ce qui n'etait pas le
+cas a 30. Mais c'est de la destruction d'information : on ne remontera pas
+beaucoup plus haut par voie purement mathematique.
+
+Pistes non testees pour aller plus loin :
+  - deconvolution : skimage.restoration.richardson_lucy ou unsupervised_wiener.
+    Sur le banc, la PSF est CONNUE (le generateur applique un flou gaussien de
+    sigma consigne dans le manifeste) — ca donne une borne superieure honnete
+    de ce qu'une deconvolution peut recuperer. En conditions reelles la PSF est
+    inconnue, il faudrait du blind deconvolution.
+  - modele appris : Real-ESRGAN, NAFNet, SwinIR, DnCNN.
+    torch 2.10 et torchvision 0.25 sont deja installes dans le .venv.
+
+
+--------------------------------------------------------------------------------
+6. ORDRE DES ETAGES   [piste]
+--------------------------------------------------------------------------------
+Ordre actuel : frequence -> exposition -> saturation, chaque etage conditionne
+au succes du precedent.
+
+Deux raisons de faire passer l'exposition en premier :
+  - les indicateurs de flou (section 3) dependent de l'exposition ;
+  - une image tres sombre ou tres claire a des statistiques MSCN degradees, donc
+    BRISQUE la penalise pour une raison qui n'a rien a voir avec la frequence.
+
+ATTENTION, les etages ne sont PAS independants dans le sens exposition ->
+saturation. Un gain scalaire en BGR preserve le canal S de HSV, qui est un
+ratio, mais PAS la chroma LAB, qui suit la luminance : assombrir une image
+reduit sa chroma. Mesure sur img_147, moyenne ramenee de 224.9 a 53.0 : la
+chroma tombe de 11.15 a 3.37, soit d'une valeur confortablement dans la plage
+[6,30] a une valeur en dessous. L'etage saturation se retrouve alors a reparer
+des degats causes par l'etage precedent, et le banc enregistre un tag
+undersaturated qui ne decrit pas l'image d'entree.
+
+Le sens inverse, lui, est propre : l'echelle de chroma en LAB laisse L* intact,
+donc la saturation ne derange pas l'exposition.
+
+Le correctif de la section 2 bis reduit fortement le probleme (17 -> 5 images
+sur 56 desaturees sous le seuil) sans le supprimer : assombrir reduit la chroma,
+c'est de la physique. Si le residu gene, la piste est de mesurer et de corriger
+la chroma APRES normalisation de l'exposition, ce que l'ordre actuel fait deja.
+
+ATTENTION au conditionnement : un echec en amont empeche les etages suivants de
+SEULEMENT S'EXECUTER. Une image bloquee sur BRISQUE ne verra jamais l'etage
+exposition. C'est visible dans evaluate_pipeline via la colonne blocked_on.
+
+
+--------------------------------------------------------------------------------
+7. SATURATION : POURQUOI LA CHROMA LAB ET PAS LE CANAL S
+--------------------------------------------------------------------------------
+Le canal S de HSV est un ratio, S = (max-min)/max. Il explose sur les pixels
+sombres et s'effondre sur les quasi-blancs : il suit donc l'exposition autant
+que la colorimetrie. Constate directement :
+
+    image     meanV   meanS (HSV)   chroma LAB
+    5.jpg       75        198          20.7
+    2.jpg      135        167          40.3
+
+5.jpg sort "ultra-saturee" en HSV alors que sa chroma perceptuelle est deux fois
+plus faible que celle de 2.jpg. La chroma LAB, sqrt((a-128)^2 + (b-128)^2), est
+stable et perceptuellement lineaire. Retenue : SAT_LOW 6.0 / SAT_HIGH 30.0.
+
+Garde-fou SAT_GREY = 1.0 : en dessous, l'image est un vrai N&B et non une image
+delavee. Sans lui, elle serait eternellement "sous-saturee" et ne convergerait
+jamais, puisque multiplier une chroma nulle ne produit rien.
+
+Le clipping rend le gain de chroma tres sous-lineaire : un gain x3 ne donne
+qu'un facteur ~1.6 effectif. La sursaturation forte est irrecuperable, comme la
+surexposition — la correction delave sans restaurer la teinte.
+
+
+--------------------------------------------------------------------------------
+8. PROFIL DU JEU DE DONNEES SOURCE (198 images)
+--------------------------------------------------------------------------------
+    luminance moyenne   min 40   p5 76   med 120   p95 149   max 191
+    chroma LAB          min 5.0  p5 7.3  med 12.2  p95 18.6  max 25.3
+
+    deja hors plage exposition [70,160] :  8 sous + 3 sur  = 11 / 198  (5.6 %)
+    deja hors plage saturation [6,30]   :  3 sous          =  3 / 198
+    aucune image N&B (chroma min 5.0)
+
+Autrement dit la classe "clean" du banc n'est pas parfaitement propre : une
+image y etait deja hors tolerance avant toute degradation (img_249.jpg).
+Et 28 % depassent le BRISQUE de 30 (section 1).
+
+
+--------------------------------------------------------------------------------
+9. CALIBRATION DU GENERATEUR D'ABERRATIONS
+--------------------------------------------------------------------------------
+Les plages d'intensite ont ete choisies en mesurant, pas au jugement. Les
+premieres estimations "raisonnables" etaient toutes trop faibles :
+
+    gain chroma          x2    x3    x4    x5
+    % au-dessus de 30   12 %  65 %  88 %  100 %
+
+Retenu : sursaturation x3.0-6.0, sous-saturation x0.30-0.48 (le plancher evite
+le garde N&B), surexposition x1.70-2.60, sous-exposition x0.30-0.45,
+flou sigma 1.0-3.5 px, bruit sigma 8-25 niveaux de gris.
+
+Verification sur les 198 generees, part qui sort reellement de la tolerance :
+    overexposed 93 %   underexposed 100 %   oversaturated 96 %   undersaturated 93 %
+
+Le reste part de trop pres du bord. Les colonnes *_after du manifeste
+permettent de les exclure avant de calculer un taux de detection.
+
+Note : le bruit gaussien tire independamment par canal AUGMENTE la chroma
+mesuree (un exemple : 11.66 -> 24.11). Une image bruitee peut donc legitimement
+declencher aussi l'etage saturation.
+
+
+--------------------------------------------------------------------------------
+10. PISTES PAR RAPPORT GAIN / EFFORT
+--------------------------------------------------------------------------------
+FAIT   Repartir de l'image d'origine pour les deux corrections     (section 2)
+FAIT   Gain d'exposition vise la cible au lieu de la depasser      (section 2 bis)
+FAIT   Seuil BRISQUE 30 -> 42                                      (section 1)
+FAIT   f_detect nomme le defaut au lieu de le deviner              (section 3)
+
+1.  Moyenne 3x3 -> non-local means. Une ligne.                      (section 4)
+2.  Passer l'exposition avant la frequence. Devient plus interessant depuis
+    f_detect : BLUR_VARIANCE est le seuil le plus expose a la luminosite,
+    6 sous-exposees sur 28 tombent sous 40.                         (sections 3, 6)
+3.  Etude statistique de la reponse de BRISQUE sur imagerie aerienne,
+    pour asseoir le seuil autrement que sur n=40.                   (section 1)
+4.  Deconvolution ou modele appris pour le flou. Investissement reel.
+                                                                    (section 5)
+
+
+--------------------------------------------------------------------------------
+11. OUTILLAGE
+--------------------------------------------------------------------------------
+generate_abberation.py   genere le banc etiquete + manifest.csv
+                         (7 classes equiprobables, seed 42, distribution
+                         round-robin puis melangee : classes equilibrees a une
+                         image pres, pas seulement en esperance)
+
+evaluate_pipeline.py     joue le pipeline sur le banc et ecrit sous runs/ :
+                           results.csv    une ligne par image
+                           confusion.csv  verite x prediction
+                           summary.txt    le rapport terminal archive
+                           <issue>/<classe>/  un triptyque par image
+                                          source | degradee | corrigee,
+                                          legende des metriques a chaque etape
+
+                         issues : ok, ko_detection, ko_classification,
+                                  ko_correction, false_positive
+                         colonnes utiles : blocked_on (premier seuil bloquant)
+                                           fail_reason (tous, chiffres)
+                         ~4 s/image, dominee par BRISQUE.
+
+                         PIEGE DE LECTURE : dans results.csv, mean_before et
+                         chroma_before designent l'image DEGRADEE, c'est-a-dire
+                         l'etat avant correction — pas l'image source.
+================================================================================
