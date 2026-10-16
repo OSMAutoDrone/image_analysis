@@ -1,2 +1,5 @@
 /img/*
 /runs/*
+/__pycache__
+*.pyc
+/RnD/__pycache__

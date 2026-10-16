@@ -13,11 +13,11 @@ import time
 import cv2
 import numpy as np
 
-from IQA_pipeline import process
-from IQA_frequency import f_analysis, BRISQUE_THRESHOLD
-from IQA_exposition import exp_analysis, EXP_LOW, EXP_HIGH
-from IQA_saturation import sat_analysis, SAT_LOW, SAT_HIGH, SAT_GREY
-from generate_abberation import INPUT_DIR as SOURCE_DIR, OUTPUT_DIR as AUGMENTED_DIR, MANIFEST, DEFECTS
+from IQA import process
+from analyse_tools.IQA_frequency import f_noise, f_sharpness, NOISE_SIGMA, BLUR_VARIANCE
+from analyse_tools.IQA_exposition import exp_analysis, EXP_LOW, EXP_HIGH
+from analyse_tools.IQA_saturation import sat_analysis, SAT_LOW, SAT_HIGH, SAT_GREY
+from utils.generate_abberation import INPUT_DIR as SOURCE_DIR, OUTPUT_DIR as AUGMENTED_DIR, MANIFEST, DEFECTS
 
 RUNS_DIR = "runs"
 PANEL_WIDTH = 420
@@ -40,21 +40,24 @@ def predict(tags):
     correct_frequency commits to a single frequency label, so blur and noise
     are mutually exclusive here and the matrix can tell them apart.
     """
-    labels = [label for label in PREDICTIONS if f"{label}_corrected" in tags]
+    labels = [label for label in PREDICTIONS if label in tags]
     return labels or ["clean"]
 
 
 def check(img_arr):
-    """Measure the three gates and name the ones the image still fails."""
-    brisque, mean, chroma = f_analysis(img_arr), exp_analysis(img_arr), sat_analysis(img_arr)
+    """Measure the four gates and name the ones the image still fails."""
+    sigma, sharpness = f_noise(img_arr), f_sharpness(img_arr)
+    mean, chroma = exp_analysis(img_arr), sat_analysis(img_arr)
     reasons = []
-    if brisque > BRISQUE_THRESHOLD:
-        reasons.append(f"brisque {brisque:.0f} > {BRISQUE_THRESHOLD}")
+    if sigma > NOISE_SIGMA:
+        reasons.append(f"bruit {sigma:.1f} > {NOISE_SIGMA}")
+    if sharpness < BLUR_VARIANCE:
+        reasons.append(f"nettete {sharpness:.0f} < {BLUR_VARIANCE}")
     if not EXP_LOW <= mean <= EXP_HIGH:
         reasons.append(f"mean {mean:.0f} hors [{EXP_LOW},{EXP_HIGH}]")
     if not (chroma < SAT_GREY or SAT_LOW <= chroma <= SAT_HIGH):
         reasons.append(f"chroma {chroma:.1f} hors [{SAT_LOW},{SAT_HIGH}]")
-    return brisque, mean, chroma, " ; ".join(reasons)
+    return sigma, sharpness, mean, chroma, " ; ".join(reasons)
 
 
 def detected(truth, labels):
@@ -77,13 +80,18 @@ def outcome(truth, labels, ok):
     return "ok" if ok else "ko_correction"
 
 
-def panel(img_arr, title, subtitle):
-    """Scale one image to the panel width and caption it underneath."""
+def panel(img_arr, title, subtitle, verdict=""):
+    """Scale one image to the panel width and caption it underneath.
+
+    Every panel carries the same metrics on the same line, so the three can be
+    read across; the verdict line is only filled on the corrected panel.
+    """
     height, width = img_arr.shape[:2]
     scaled = cv2.resize(img_arr, (PANEL_WIDTH, round(height * PANEL_WIDTH / width)))
-    caption = np.full((44, PANEL_WIDTH, 3), 255, np.uint8)
+    caption = np.full((60, PANEL_WIDTH, 3), 255, np.uint8)
     cv2.putText(caption, title, (8, 17), cv2.FONT_HERSHEY_SIMPLEX, 0.42, (0, 0, 0), 1, cv2.LINE_AA)
     cv2.putText(caption, subtitle, (8, 34), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (70, 70, 70), 1, cv2.LINE_AA)
+    cv2.putText(caption, verdict, (8, 51), cv2.FONT_HERSHEY_SIMPLEX, 0.36, (70, 70, 70), 1, cv2.LINE_AA)
     return np.vstack([scaled, caption])
 
 
@@ -139,18 +147,20 @@ def main():
         source = cv2.imread(os.path.join(SOURCE_DIR, row["source"]), cv2.IMREAD_COLOR)
         degraded = cv2.imread(os.path.join(AUGMENTED_DIR, row["output"]), cv2.IMREAD_COLOR)
 
-        before = f_analysis(degraded)
-        corrected, tags, status = process(degraded.copy())
-        brisque, mean, chroma, reason = check(corrected)
+        sigma_in, sharp_in = f_noise(degraded), f_sharpness(degraded)
+        corrected, tags = process(degraded.copy())
+        sigma, sharpness, mean, chroma, reason = check(corrected)
 
         labels = predict(tags)
-        bucket = outcome(truth, labels, status == "ok")
+        repaired = not reason
+        bucket = outcome(truth, labels, repaired)
         records.append({
             "output": row["output"], "truth": truth, "intensity": row["intensity"],
             "predicted": labels[0], "tags": "|".join(labels),
-            "detected": int(detected(truth, labels)), "corrected": int(status == "ok"),
-            "status": status, "outcome": bucket,
-            "brisque_before": f"{before:.1f}", "brisque_after": f"{brisque:.1f}",
+            "detected": int(detected(truth, labels)), "corrected": int(repaired),
+            "outcome": bucket,
+            "noise_before": f"{sigma_in:.2f}", "noise_after": f"{sigma:.2f}",
+            "sharp_before": f"{sharp_in:.0f}", "sharp_after": f"{sharpness:.0f}",
             "mean_before": row["mean_after"], "mean_after": f"{mean:.1f}",
             "chroma_before": row["chroma_after"], "chroma_after": f"{chroma:.2f}",
             "blocked_on": reason.split()[0] if reason else "-", "fail_reason": reason,
@@ -159,12 +169,16 @@ def main():
         folder = os.path.join(run_dir, bucket, truth)
         os.makedirs(folder, exist_ok=True)
         cv2.imwrite(os.path.join(folder, row["output"]), np.hstack([
-            panel(source, "1. source", f"brisque {f_analysis(source):.0f}"),
-            panel(degraded, f"2. degradee : {truth} x{float(row['intensity']):.2f}",
-                  f"brisque {before:.0f}  mean {float(row['mean_after']):.0f}"
-                  f"  chroma {float(row['chroma_after']):.1f}"),
-            panel(corrected, f"3. corrigee -> {'|'.join(labels)}",
+            panel(degraded, f"1. degradee : {truth} x{float(row['intensity']):.2f}",
+                  f"bruit {sigma_in:.1f}  nettete {sharp_in:.0f}"
+                  f"  mean {float(row['mean_after']):.0f}  chroma {float(row['chroma_after']):.1f}"),
+            panel(corrected, f"2. corrigee -> {'|'.join(labels)}",
+                  f"bruit {sigma:.1f}  nettete {sharpness:.0f}"
+                  f"  mean {mean:.0f}  chroma {chroma:.1f}",
                   reason or "dans toutes les tolerances"),
+            panel(source, "3. source (reference)",
+                  f"bruit {f_noise(source):.1f}  nettete {f_sharpness(source):.0f}"
+                  f"  mean {exp_analysis(source):.0f}  chroma {sat_analysis(source):.1f}"),
         ]))
         print(f"[{index:3}/{len(rows)}] {row['output']:32} {truth:15} -> {'|'.join(labels):22} {bucket}")
 

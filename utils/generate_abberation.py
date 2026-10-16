@@ -1,15 +1,4 @@
-"""Build a labelled benchmark set of degraded images for the IQA pipeline.
-
-Every source image is assigned exactly one class among DEFECTS, in equal
-proportions, and written to OUTPUT_DIR alongside a CSV manifest holding the
-ground truth: applied class, applied intensity, and the exposure/saturation
-metrics measured before and after degradation.
-
-The intensity ranges were calibrated on the 198-image source set so that the
-degraded images actually land outside the pipeline's tolerance bands. They are
-not guarantees: clipping makes the effective shift sublinear, and an image that
-starts near a band edge may stay inside it. Filter on the manifest's *_after
-columns to tell a genuine defect from a nominal one before scoring detection.
+"""Build a labelled benchmark set of degraded images for the IQA pipeline. Used mainly to generate test data.
 """
 
 import csv
@@ -18,8 +7,8 @@ import os
 import cv2
 import numpy as np
 
-from IQA_exposition import exp_analysis
-from IQA_saturation import sat_analysis, sat_scale
+from analyse_tools.IQA_exposition import exp_analysis
+from analyse_tools.IQA_saturation import sat_analysis, sat_scale
 
 INPUT_DIR = "../AI_analysis/data/base/osm/img"
 OUTPUT_DIR = "img/abberations/augmented"
@@ -27,6 +16,7 @@ MANIFEST = "manifest.csv"
 
 # Re-encoding at high quality keeps JPEG artifacts out of the BRISQUE score,
 # where they would otherwise be blamed on the injected defect.
+# BRISQUE is not currently used in the pipeline, but it used to be. This is an artifact that might not be currently usefull.
 JPEG_QUALITY = 95
 
 SEED = 42
@@ -38,7 +28,7 @@ DEFECTS = ("clean", "blur", "noise", "overexposed", "underexposed",
 # still crossing the detection thresholds on most of the source set.
 BLUR_SIGMA = (1.0, 3.5)              # pixels: mild to obvious defocus
 NOISE_SIGMA = (8.0, 25.0)            # grey levels: roughly ISO 1600 to ISO 12800
-OVEREXPOSE_GAIN = (1.70, 2.60)       # x1.7 clears EXP_HIGH on 77% of the set
+OVEREXPOSE_GAIN = (1.40, 2)         # x1.7 clears EXP_HIGH on 77% of the set
 UNDEREXPOSE_GAIN = (0.30, 0.45)      # x0.45 clears EXP_LOW on 97%
 OVERSATURATE_GAIN = (3.00, 6.00)     # LAB clipping makes anything below x3 too weak
 UNDERSATURATE_GAIN = (0.30, 0.48)    # floor kept above SAT_GREY to avoid the greyscale guard

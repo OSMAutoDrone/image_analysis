@@ -22,17 +22,33 @@ C'est aussi un risque de biais pour tout le protocole de test : BRISQUE sert a
 la fois de detecteur ET de critere de reussite. S'il est mal calibre sur le
 domaine, il fausse les deux bouts de la mesure.
 
-ACTION FAITE : BRISQUE_THRESHOLD releve de 30 a 42 (juste au-dessus du p90 des
-sources vierges, donc ~90 % d'entre elles passent).
-A FAIRE : vraie etude statistique de la reponse de BRISQUE sur ce domaine.
-Le chiffre 42 repose sur n=40, c'est provisoire.
+PREMIERE ACTION : seuil releve de 30 a 42. Ca n'a pas suffi — voir ci-dessous.
 
-EFFET DE BORD DU RELEVEMENT, a garder en tete pour lire le test :
-les images bruitees degradees ont un BRISQUE de p10 30.9 / med 45.5 / p90 53.2.
-Avec un seuil a 42, une part notable des images bruitees ne sera plus flaguee
-du tout. On echange des faux positifs sur les images propres contre des faux
-negatifs sur le bruit. Les images floues, elles, restent largement au-dessus
-(p10 49.7 / med 63.4), donc la detection du flou n'est pas affectee.
+ACTION FINALE : BRISQUE A ETE RETIRE DU PIPELINE.
+Compare a f_detect sur les 198 degradees du banc :
+
+                        BRISQUE (seuil 42)      f_detect
+    cout par image           640 ms              10.9 ms     (x59)
+    faux positifs sur les
+    classes non-frequence      17                    0
+    images bruitees vues     18/28                28/28
+    images floues vues       29/29                26/29
+    total erreurs axe freq     27                    9
+
+Croisement : 20 images rejetees par BRISQUE que f_detect ne sait pas nommer
+(elles devenaient low_quality sans qu'aucune mesure spatiale ne trouve rien),
+et 15 images laissees passer par BRISQUE alors que f_detect y voit un defaut,
+dont les 10 bruitees. L'architecture conditionnait le bon detecteur au feu vert
+du mauvais.
+
+CE QU'ON A PERDU EN LE RETIRANT, et c'est reel : le seul temoin INDEPENDANT.
+Detection et verification utilisent desormais les memes deux mesures, donc
+"corrige" veut dire "le pipeline est d'accord avec lui-meme". Voir section 12.
+
+RESERVE : le banc ne contient que du flou gaussien et du bruit gaussien, soit
+exactement ce que f_detect mesure. Sa victoire est en partie circulaire. Sur des
+donnees reelles (compression, ringing, banding, flou de bouge), BRISQUE pourrait
+attraper ce que les deux mesures ignorent. Le banc ne peut pas en juger.
 
 
 --------------------------------------------------------------------------------
@@ -257,17 +273,19 @@ declencher aussi l'etage saturation.
 --------------------------------------------------------------------------------
 FAIT   Repartir de l'image d'origine pour les deux corrections     (section 2)
 FAIT   Gain d'exposition vise la cible au lieu de la depasser      (section 2 bis)
-FAIT   Seuil BRISQUE 30 -> 42                                      (section 1)
 FAIT   f_detect nomme le defaut au lieu de le deviner              (section 3)
+FAIT   BRISQUE retire du pipeline                                  (sections 1, 12)
 
-1.  Moyenne 3x3 -> non-local means. Une ligne.                      (section 4)
-2.  Passer l'exposition avant la frequence. Devient plus interessant depuis
-    f_detect : BLUR_VARIANCE est le seuil le plus expose a la luminosite,
-    6 sous-exposees sur 28 tombent sous 40.                         (sections 3, 6)
-3.  Etude statistique de la reponse de BRISQUE sur imagerie aerienne,
-    pour asseoir le seuil autrement que sur n=40.                   (section 1)
-4.  Deconvolution ou modele appris pour le flou. Investissement reel.
-                                                                    (section 5)
+1.  Passer l'exposition avant la frequence. C'est devenu la PREMIERE source
+    d'erreur : 6 sous-exposees sur 28 nommees "blur", parce que la variance du
+    laplacien baisse avec la luminosite.                 (sections 3, 6, 12)
+2.  SSIM par rapport a la source dans evaluate_pipeline, pour retrouver un
+    temoin independant de la reussite des corrections.              (section 12)
+3.  Moyenne 3x3 -> non-local means. Une ligne.                      (section 4)
+4.  Etude statistique de BRISQUE : sans objet depuis son retrait, a rouvrir
+    seulement si on le reintroduit comme temoin.                   (section 1)
+5.  Deconvolution ou modele appris pour le flou. Le SSIM montre que le
+    sharpen ne restaure rien (+0.021).                    (sections 5, 12)
 
 
 --------------------------------------------------------------------------------
@@ -296,3 +314,61 @@ evaluate_pipeline.py     joue le pipeline sur le banc et ecrit sous runs/ :
                          chroma_before designent l'image DEGRADEE, c'est-a-dire
                          l'etat avant correction — pas l'image source.
 ================================================================================
+
+
+--------------------------------------------------------------------------------
+12. RESULTATS APRES RETRAIT DE BRISQUE, ET LE PIEGE DU 100 %
+--------------------------------------------------------------------------------
+Run complet sur les 198 images du banc, avant / apres le retrait :
+
+                        avant (BRISQUE)   apres (f_detect)
+    issues "ok"            156  (79 %)      188  (95 %)
+    classe exacte          151  (76 %)      180  (91 %)
+    duree                   877 s             50 s
+
+    classe exacte      avant   apres
+    clean              22/29   28/29
+    blur               17/29   26/29
+    noise              18/28   28/28
+    overexposed        22/28   26/28
+    underexposed       27/28   22/28
+    oversaturated      21/28   25/28
+    undersaturated     24/28   25/28
+
+La seule categorie qui recule est underexposed, 27 -> 22, et la cause est connue
+et documentee : 6 sous-exposees sont nommees "blur" parce que la variance du
+laplacien baisse avec la luminosite. C'est devenu la premiere source d'erreur
+du pipeline, et son correctif est la piste n.2 (exposition avant frequence).
+
+LE PIEGE : la colonne "corrige" affiche 100 % sur les sept categories. Ca ne
+veut plus dire grand-chose, puisque le pipeline corrige jusqu'a ce que ses
+PROPRES seuils passent. Il n'y a plus de temoin independant.
+
+Un temoin independant existe pourtant sur le banc, et lui seul : l'image SOURCE.
+SSIM en niveaux de gris de la corrigee par rapport a la source :
+
+    classe            degradee   corrigee      gain
+    clean                1.000      0.988    -0.012
+    blur                 0.719      0.740    +0.021
+    noise                0.691      0.844    +0.152
+    overexposed          0.631      0.754    +0.123
+    underexposed         0.492      0.913    +0.421
+    oversaturated        0.952      0.920    -0.032
+    undersaturated       0.998      0.990    -0.008
+
+Lecture : exposition et bruit restaurent vraiment. LE FLOU NON — +0.021, c'est
+du bruit de mesure. Le sharpen fait passer la variance du laplacien au-dessus de
+40, c'est-a-dire exactement le seuil qui sert de porte, sans rendre l'image a
+son etat d'origine. Les 26/29 flous comptes "corriges" sont un succes de facade.
+C'est precisement le risque annonce en retirant BRISQUE, et il s'est realise sur
+la seule categorie ou la correction est mathematiquement impuissante (section 5).
+
+Le SSIM en gris ne juge PAS les classes de saturation : il ignore la chroma,
+donc il voit les effets de bord en luminance de la correction sans voir son
+benefice. Les -0.032 et -0.008 ne sont pas interpretables tels quels ; il
+faudrait un SSIM sur a*/b* ou un ecart CIEDE2000.
+
+A FAIRE : ajouter le SSIM par rapport a la source comme colonne d'evaluate_
+pipeline. Le PIPELINE ne peut pas s'en servir (pas de reference en production),
+mais le BANC l'a, et c'est le seul moyen de distinguer une vraie restauration
+d'un seuil franchi.

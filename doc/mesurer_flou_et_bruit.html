@@ -1,0 +1,402 @@
+<title>Mesurer flou et bruit</title>
+
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:ital,wght@0,400;0,500;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+
+<style>
+  /* Colonne de lecture unique en empattements, figures et tableaux pleine largeur.
+     Neutres biaisés vers le bleu froid (instrument optique) ; trois teintes
+     catégorielles réservées aux classes flou / propre / bruit. */
+  :root {
+    --bg: #F2F5F7;
+    --surface: #FFFFFF;
+    --fg: #17212B;
+    --muted: #5B6977;
+    --line: #D6DEE5;
+    --accent: #1A5F87;
+    --blur: #6B4FA6;
+    --clean: #3F7D6E;
+    --noise: #B25F16;
+    --sans: "IBM Plex Sans", system-ui, sans-serif;
+    --serif: "IBM Plex Serif", Georgia, serif;
+    --mono: "IBM Plex Mono", ui-monospace, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --bg: #0E141A;
+      --surface: #161F27;
+      --fg: #E2E9EF;
+      --muted: #94A3B1;
+      --line: #28333E;
+      --accent: #62AAD6;
+      --blur: #A48BDD;
+      --clean: #6FBCA8;
+      --noise: #DE9349;
+      color-scheme: dark;
+    }
+  }
+  :root[data-theme="dark"] {
+    --bg: #0E141A;
+    --surface: #161F27;
+    --fg: #E2E9EF;
+    --muted: #94A3B1;
+    --line: #28333E;
+    --accent: #62AAD6;
+    --blur: #A48BDD;
+    --clean: #6FBCA8;
+    --noise: #DE9349;
+    color-scheme: dark;
+  }
+
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--serif);
+    font-size: 16px;
+    line-height: 1.62;
+    padding-block: 3rem 5rem;
+    padding-left: 20px;
+    padding-right: 20px;
+  }
+  .wrap { max-width: 720px; margin: 0 auto; display: flex; flex-direction: column; gap: 1.15rem; }
+
+  h1 {
+    font-family: var(--sans); font-weight: 600; font-size: clamp(1.9rem, 5vw, 2.6rem);
+    line-height: 1.12; letter-spacing: -0.02em; margin: 0; text-wrap: balance;
+  }
+  .standfirst { font-size: 1.1rem; color: var(--muted); margin: 0; text-wrap: balance; }
+  .meta {
+    font-family: var(--mono); font-size: 0.75rem; color: var(--muted);
+    text-transform: uppercase; letter-spacing: 0.09em; margin: 0;
+    padding-bottom: 1.2rem; border-bottom: 2px solid var(--fg);
+  }
+  h2 {
+    font-family: var(--sans); font-weight: 600; font-size: 1.45rem; letter-spacing: -0.01em;
+    margin: 2.4rem 0 0; text-wrap: balance;
+  }
+  h2 .num {
+    font-family: var(--mono); font-size: 0.8rem; color: var(--accent);
+    display: block; letter-spacing: 0.1em; margin-bottom: 0.25rem;
+  }
+  h3 {
+    font-family: var(--sans); font-weight: 600; font-size: 1.02rem;
+    margin: 1.5rem 0 0; color: var(--fg);
+  }
+  p { margin: 0; }
+  strong { font-weight: 600; }
+  em.term { font-style: italic; color: var(--muted); }
+  code {
+    font-family: var(--mono); font-size: 0.87em;
+    background: color-mix(in srgb, var(--accent) 10%, transparent);
+    padding: 0.08em 0.32em; border-radius: 3px;
+  }
+  pre {
+    font-family: var(--mono); font-size: 0.8rem; line-height: 1.55;
+    background: var(--surface); border: 1px solid var(--line); border-left: 3px solid var(--accent);
+    padding: 0.9rem 1rem; overflow-x: auto; margin: 0; border-radius: 2px;
+  }
+  pre code { background: none; padding: 0; font-size: 1em; }
+
+  figure { margin: 0.8rem 0 0; }
+  figure svg { display: block; width: 100%; max-width: 100%; height: auto; color: var(--fg); }
+  figcaption {
+    font-family: var(--sans); font-size: 0.83rem; color: var(--muted);
+    margin-top: 0.55rem; line-height: 1.5;
+  }
+  .figbox {
+    background: var(--surface); border: 1px solid var(--line);
+    padding: 1.1rem 1rem 0.9rem; border-radius: 3px;
+  }
+
+  .tablewrap { overflow-x: auto; }
+  table {
+    border-collapse: collapse; width: 100%; font-family: var(--sans);
+    font-size: 0.87rem; font-variant-numeric: tabular-nums; min-width: 340px;
+  }
+  th, td { text-align: right; padding: 0.42rem 0.6rem; border-bottom: 1px solid var(--line); }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-weight: 600; font-size: 0.72rem; text-transform: uppercase;
+    letter-spacing: 0.07em; color: var(--muted); border-bottom: 1.5px solid var(--fg);
+  }
+  tbody tr:last-child td { border-bottom: none; }
+  td.pos { color: var(--clean); font-weight: 500; }
+  td.neg { color: var(--noise); font-weight: 500; }
+  .sw { display: inline-block; width: 9px; height: 9px; border-radius: 2px; margin-right: 6px; vertical-align: baseline; }
+
+  .callout {
+    background: var(--surface); border: 1px solid var(--line);
+    border-left: 3px solid var(--noise); padding: 0.9rem 1.05rem; border-radius: 2px;
+    display: flex; flex-direction: column; gap: 0.5rem;
+  }
+  .callout .lbl {
+    font-family: var(--mono); font-size: 0.7rem; text-transform: uppercase;
+    letter-spacing: 0.1em; color: var(--noise);
+  }
+  .foot {
+    margin-top: 2.5rem; padding-top: 1.1rem; border-top: 1px solid var(--line);
+    font-family: var(--sans); font-size: 0.83rem; color: var(--muted);
+  }
+</style>
+
+<div class="wrap">
+
+  <h1>Mesurer flou et bruit</h1>
+  <p class="standfirst">Deux convolutions 3&times;3 qui séparent le flou, le bruit et l'image propre par deux ordres de grandeur — là où un score de qualité global n'y arrivait pas.</p>
+  <p class="meta">Pipeline IQA &middot; imagerie aérienne OSM &middot; banc de 198 images</p>
+
+  <h2><span class="num">01</span>Pourquoi un score global ne suffit pas</h2>
+  <p>Le pipeline reposait sur BRISQUE, un modèle de statistiques naturelles qui rend un score unique de dégradation. Le problème n'est pas sa justesse mais sa <strong>nature</strong> : il dit qu'une image est dégradée, jamais comment. Le pipeline devait donc deviner, en essayant d'abord l'accentuation puis le lissage — ce qui accentuait le bruit avant de le lisser, et lissait le flou après l'avoir accentué.</p>
+  <p>Sur ce domaine il était en plus hors de son champ d'entraînement : 28&nbsp;% des images sources intactes dépassaient déjà son seuil, et il coûtait 640&nbsp;ms par image contre 11&nbsp;ms pour les deux mesures décrites ici. Il a été retiré.</p>
+
+  <h2><span class="num">02</span>L'estimateur d'Immerkær</h2>
+  <p>Mesurer le bruit sans disposer de l'image propre paraît mal posé : une variation locale peut être du bruit ou un vrai détail. Ce qui les sépare est leur <strong>structure spatiale</strong>. Le bruit de capteur est indépendant d'un pixel au suivant ; la structure d'une image est corrélée localement — un toit, une route, un champ forment des zones plates ou des dégradés lisses.</p>
+  <p>L'idée est donc de construire un opérateur qui <strong>annule tout ce qui est localement régulier</strong>, et de mesurer ce qui reste.</p>
+
+  <figure class="figbox">
+    <svg viewBox="0 0 660 268" role="img" aria-label="Le masque d'Immerkaer est le produit extérieur du noyau de différence seconde 1, -2, 1 avec lui-même">
+      <defs>
+        <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Mono, monospace" font-size="13" fill="currentColor">
+
+        <text x="260" y="26" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif" letter-spacing="1">DIFFÉRENCE SECONDE EN X</text>
+        <g>
+          <rect x="260" y="38" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1"/>
+          <rect x="300" y="38" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1"/>
+          <rect x="340" y="38" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="280" y="63" text-anchor="middle">1</text>
+          <text x="320" y="63" text-anchor="middle">−2</text>
+          <text x="360" y="63" text-anchor="middle">1</text>
+        </g>
+
+        <text x="172" y="100" font-size="11" fill="var(--muted)" font-family="IBM Plex Sans, sans-serif" letter-spacing="1" text-anchor="end">EN Y</text>
+        <g>
+          <rect x="180" y="108" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1"/>
+          <rect x="180" y="148" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1"/>
+          <rect x="180" y="188" width="40" height="40" fill="none" stroke="currentColor" stroke-width="1"/>
+          <text x="200" y="133" text-anchor="middle">1</text>
+          <text x="200" y="173" text-anchor="middle">−2</text>
+          <text x="200" y="213" text-anchor="middle">1</text>
+        </g>
+
+        <text x="240" y="174" text-anchor="middle" font-size="16" fill="var(--accent)">⊗</text>
+
+        <g stroke="var(--accent)" stroke-width="1.5" fill="none">
+          <rect x="260" y="108" width="40" height="40"/><rect x="300" y="108" width="40" height="40"/><rect x="340" y="108" width="40" height="40"/>
+          <rect x="260" y="148" width="40" height="40"/><rect x="300" y="148" width="40" height="40"/><rect x="340" y="148" width="40" height="40"/>
+          <rect x="260" y="188" width="40" height="40"/><rect x="300" y="188" width="40" height="40"/><rect x="340" y="188" width="40" height="40"/>
+        </g>
+        <g fill="currentColor">
+          <text x="280" y="133" text-anchor="middle">1</text><text x="320" y="133" text-anchor="middle">−2</text><text x="360" y="133" text-anchor="middle">1</text>
+          <text x="280" y="173" text-anchor="middle">−2</text><text x="320" y="173" text-anchor="middle" font-weight="500" fill="var(--accent)">4</text><text x="360" y="173" text-anchor="middle">−2</text>
+          <text x="280" y="213" text-anchor="middle">1</text><text x="320" y="213" text-anchor="middle">−2</text><text x="360" y="213" text-anchor="middle">1</text>
+        </g>
+
+        <line x1="392" y1="168" x2="432" y2="168" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="444" y="160" font-size="12" font-family="IBM Plex Sans, sans-serif" fill="var(--muted)">somme des carrés</text>
+        <text x="444" y="180" font-size="15" fill="currentColor">Σ cᵢ² = 36</text>
+
+        <text x="260" y="254" font-size="12" font-family="IBM Plex Sans, sans-serif" fill="var(--muted)">s'annule sur toute surface I(x,y) = f(x) + g(y) affine</text>
+      </g>
+    </svg>
+    <figcaption>Le masque est le produit extérieur du noyau de différence seconde <code>[1, −2, 1]</code> avec lui-même. Comme ce noyau 1-D annule toute séquence linéaire, le masque 2-D annule tout plan et tout dégradé additivement séparable. On peut aussi l'écrire <code>L₂ − 2·L₁</code>, différence entre le laplacien diagonal et deux fois le laplacien à quatre voisins.</figcaption>
+  </figure>
+
+  <h3>Ce qui survit au filtre</h3>
+  <p>Passe ce masque sur un dégradé de ciel, un mur uniforme, une pente d'éclairage : la réponse est quasi nulle. Passe-le sur du bruit décorrélé : chaque pixel contribue pleinement. C'est un passe-très-haut conçu pour être aveugle à l'image et sensible au seul bruit.</p>
+
+  <h3>D'où viennent les deux constantes</h3>
+  <pre><code>σ = sqrt(π/2) · Σ|réponse| / (6 · (W−2) · (H−2))</code></pre>
+  <p><strong>Le 6</strong> est la norme du masque. Si le bruit d'entrée est i.i.d. d'écart-type σ, la réponse en un pixel est une combinaison linéaire dont la variance vaut σ²·Σcᵢ². Ici Σcᵢ² = 36, donc l'écart-type de la réponse est 6σ. Diviser par 6 rend la mesure à l'échelle du bruit d'origine, <strong>en niveaux de gris</strong> — un σ de 12 se compare directement aux 8 à 25 niveaux que le générateur injecte.</p>
+  <p><strong>Le √(π/2)</strong> convertit un écart absolu moyen en écart-type. On somme des valeurs absolues plutôt que des carrés, ce qui résiste mieux aux contours francs qui échappent à l'annulation. Pour une gaussienne centrée, E|X| = σ·√(2/π), d'où le facteur inverse ≈ 1,2533 pour remonter à σ.</p>
+  <p>Le <code>(W−2)·(H−2)</code> compte les positions où le masque 3&times;3 tient entièrement dans l'image : on moyenne sur les pixels réellement mesurés, bord exclu.</p>
+
+  <pre><code>def f_noise(img_arr):
+    gray = cv2.cvtColor(img_arr, cv2.COLOR_BGR2GRAY).astype(np.float32)
+    height, width = gray.shape
+    response = np.abs(cv2.filter2D(gray, -1, _NOISE_KERNEL)).sum()
+    return float(np.sqrt(np.pi / 2) * response / (6.0 * (width - 2) * (height - 2)))</code></pre>
+
+  <h2><span class="num">03</span>La variance du laplacien</h2>
+  <p>Le laplacien est l'opérateur de dérivée seconde. Sur une zone d'intensité constante ou en rampe, sa réponse est nulle ; sur un contour, elle est forte, positive d'un côté et négative de l'autre. La carte laplacienne d'une image est donc centrée autour de zéro, et sa <strong>variance</strong> mesure l'amplitude de ses excursions — la force et l'abondance des contours. C'est le critère classique d'autofocus : un appareil cherche la position de bague qui le maximise.</p>
+
+  <figure class="figbox">
+    <svg viewBox="0 0 660 272" role="img" aria-label="Un contour net produit une paire d'excursions hautes et étroites de la dérivée seconde ; un contour flou produit des excursions basses et larges">
+      <g fill="currentColor">
+        <text x="40" y="20" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600">contour net</text>
+        <text x="360" y="20" font-family="IBM Plex Sans, sans-serif" font-size="12" font-weight="600">contour flouté</text>
+
+        <text x="30" y="80" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="var(--muted)" text-anchor="end" transform="rotate(-90 30 80)">intensité</text>
+
+        <line x1="40" y1="125" x2="300" y2="125" stroke="var(--line)" stroke-width="1"/>
+        <path d="M40,110 L155,110 L175,45 L300,45" fill="none" stroke="var(--accent)" stroke-width="2"/>
+
+        <line x1="360" y1="125" x2="620" y2="125" stroke="var(--line)" stroke-width="1"/>
+        <path d="M360,110 L400,110 C440,110 450,45 490,45 L620,45" fill="none" stroke="var(--accent)" stroke-width="2"/>
+
+        <text x="30" y="215" font-family="IBM Plex Sans, sans-serif" font-size="10" fill="var(--muted)" text-anchor="end" transform="rotate(-90 30 215)">dérivée 2ᵉ</text>
+
+        <line x1="40" y1="212" x2="300" y2="212" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/>
+        <path d="M40,212 L150,212 L158,160 L166,212 L170,212 L178,264 L186,212 L300,212" fill="none" stroke="var(--blur)" stroke-width="2"/>
+
+        <line x1="360" y1="212" x2="620" y2="212" stroke="var(--line)" stroke-width="1" stroke-dasharray="3 3"/>
+        <path d="M360,212 L396,212 C412,212 416,196 432,196 C448,196 452,212 468,212 C484,212 488,228 504,228 C520,228 524,212 540,212 L620,212" fill="none" stroke="var(--blur)" stroke-width="2"/>
+
+        <text x="196" y="168" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">variance élevée</text>
+        <text x="548" y="200" font-family="IBM Plex Sans, sans-serif" font-size="11" fill="var(--muted)">effondrée</text>
+      </g>
+    </svg>
+    <figcaption>Un flou gaussien atténue les hautes fréquences ; le laplacien, dont la réponse fréquentielle est en −4π²|f|², les amplifie. Les deux se composent, et il ne reste rien à amplifier. Sur le banc, la médiane passe de 351 pour une image propre à 10 pour une image floutée. L'écart réel est plus brutal que ce schéma ne le suggère.</figcaption>
+  </figure>
+
+  <pre><code>def f_sharpness(img_arr):
+    gray = cv2.cvtColor(img_arr, cv2.COLOR_BGR2GRAY)
+    return float(cv2.Laplacian(gray, cv2.CV_64F).var())</code></pre>
+
+  <h2><span class="num">04</span>L'ordre des deux tests n'est pas indifférent</h2>
+  <p>Le bruit est le signal le plus haute-fréquence possible, puisqu'il est décorrélé d'un pixel au suivant. Le laplacien l'amplifie donc massivement : <strong>3572 en médiane pour une image bruitée</strong>, dix fois plus qu'une image propre. Une image bruitée est lue par ce critère comme <em class="term">extrêmement nette</em>.</p>
+
+  <figure class="figbox">
+    <svg viewBox="0 0 660 172" role="img" aria-label="Le test du bruit précède celui du flou, car une image bruitée passerait le test de netteté sans être détectée">
+      <defs>
+        <marker id="ar2" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+          <path d="M0,1 L9,5 L0,9 z" fill="currentColor"/>
+        </marker>
+      </defs>
+      <g font-family="IBM Plex Sans, sans-serif" font-size="12" fill="currentColor">
+
+        <rect x="8" y="92" width="72" height="34" fill="none" stroke="currentColor" stroke-width="1" rx="2"/>
+        <text x="44" y="113" text-anchor="middle">image</text>
+
+        <rect x="112" y="92" width="126" height="34" fill="none" stroke="var(--accent)" stroke-width="1.5" rx="2"/>
+        <text x="175" y="113" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11">bruit &gt; 5.0 ?</text>
+
+        <rect x="124" y="20" width="102" height="30" fill="none" stroke="var(--noise)" stroke-width="1.5" rx="2"/>
+        <text x="175" y="40" text-anchor="middle" fill="var(--noise)">noise</text>
+
+        <rect x="272" y="92" width="140" height="34" fill="none" stroke="var(--accent)" stroke-width="1.5" rx="2"/>
+        <text x="342" y="113" text-anchor="middle" font-family="IBM Plex Mono, monospace" font-size="11">netteté &lt; 40 ?</text>
+
+        <rect x="291" y="20" width="102" height="30" fill="none" stroke="var(--blur)" stroke-width="1.5" rx="2"/>
+        <text x="342" y="40" text-anchor="middle" fill="var(--blur)">blur</text>
+
+        <rect x="446" y="92" width="150" height="34" fill="none" stroke="var(--clean)" stroke-width="1.5" rx="2"/>
+        <text x="521" y="113" text-anchor="middle" fill="var(--clean)">aucun défaut</text>
+
+        <line x1="80" y1="109" x2="106" y2="109" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <line x1="175" y1="92" x2="175" y2="56" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="184" y="76" font-size="11" fill="var(--muted)">oui</text>
+        <line x1="238" y1="109" x2="266" y2="109" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="243" y="132" font-size="11" fill="var(--muted)">non</text>
+        <line x1="342" y1="92" x2="342" y2="56" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="351" y="76" font-size="11" fill="var(--muted)">oui</text>
+        <line x1="412" y1="109" x2="440" y2="109" stroke="currentColor" stroke-width="1.2" marker-end="url(#ar2)"/>
+        <text x="417" y="132" font-size="11" fill="var(--muted)">non</text>
+
+        <text x="8" y="163" font-size="11.5" fill="var(--muted)">Inverser les deux tests laisserait passer toute image bruitée : le bruit fait monter la netteté, pas baisser.</text>
+      </g>
+    </svg>
+    <figcaption>L'asymétrie n'est pas réciproque. Une image floue a un σ de bruit de 0,31 : elle ne risque jamais d'être prise pour du bruit, alors qu'une image bruitée serait systématiquement lue comme nette.</figcaption>
+  </figure>
+
+  <h2><span class="num">05</span>Le pouvoir de séparation</h2>
+  <p>Mesuré sur les 198 images du banc, intervalles p10–p90 par classe. Les seuils retenus tombent dans les trous.</p>
+
+  <figure class="figbox">
+    <svg viewBox="0 0 660 302" role="img" aria-label="Sur les deux mesures, les intervalles p10 à p90 des classes flou, propre et bruit ne se recouvrent pas, et les seuils tombent dans les intervalles vides">
+      <g font-family="IBM Plex Sans, sans-serif" font-size="11" fill="currentColor">
+
+        <text x="0" y="14" font-size="11.5" font-weight="600">σ de bruit — niveaux de gris</text>
+        <line x1="463.5" y1="34" x2="463.5" y2="118" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="469" y="31" font-size="10.5" fill="var(--accent)" font-family="IBM Plex Mono, monospace">seuil 5.0</text>
+        <rect x="133.8" y="40" width="35.9" height="16" fill="var(--blur)" rx="2"/>
+        <rect x="227.9" y="64" width="185.7" height="16" fill="var(--clean)" rx="2"/>
+        <rect x="513.9" y="88" width="82.2" height="16" fill="var(--noise)" rx="2"/>
+        <text x="92" y="52" text-anchor="end" fill="var(--muted)">flou</text>
+        <text x="92" y="76" text-anchor="end" fill="var(--muted)">propre</text>
+        <text x="92" y="100" text-anchor="end" fill="var(--muted)">bruit</text>
+        <line x1="100" y1="118" x2="620" y2="118" stroke="var(--line)" stroke-width="1"/>
+        <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)" text-anchor="middle">
+          <text x="145.8" y="133">0.3</text><text x="281.7" y="133">1</text><text x="405.8" y="133">3</text><text x="541.7" y="133">10</text>
+        </g>
+
+        <text x="0" y="172" font-size="11.5" font-weight="600">Variance du laplacien</text>
+        <line x1="270.6" y1="192" x2="270.6" y2="276" stroke="var(--accent)" stroke-width="1.2" stroke-dasharray="4 3"/>
+        <text x="276" y="189" font-size="10.5" fill="var(--accent)" font-family="IBM Plex Mono, monospace">seuil 40</text>
+        <rect x="119.0" y="198" width="143.2" height="16" fill="var(--blur)" rx="2"/>
+        <rect x="338.2" y="222" width="158.0" height="16" fill="var(--clean)" rx="2"/>
+        <rect x="512.4" y="246" width="85.2" height="16" fill="var(--noise)" rx="2"/>
+        <text x="92" y="210" text-anchor="end" fill="var(--muted)">flou</text>
+        <text x="92" y="234" text-anchor="end" fill="var(--muted)">propre</text>
+        <text x="92" y="258" text-anchor="end" fill="var(--muted)">bruit</text>
+        <line x1="100" y1="276" x2="620" y2="276" stroke="var(--line)" stroke-width="1"/>
+        <g font-family="IBM Plex Mono, monospace" font-size="10" fill="var(--muted)" text-anchor="middle">
+          <text x="179.4" y="291">10</text><text x="331.2" y="291">100</text><text x="482.5" y="291">1000</text>
+        </g>
+      </g>
+    </svg>
+    <figcaption>Axes logarithmiques. Sur le σ de bruit, l'écart le plus serré est un facteur 2,4 entre le p90 des images propres (3,21) et le p10 des bruitées (7,81). Sur la variance du laplacien, c'est un facteur 3,2 entre flou et propre.</figcaption>
+  </figure>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>classe</th><th>σ de bruit</th><th>variance laplacien</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sw" style="background:var(--blur)"></span>flou</td><td>0,27 – 0,37</td><td>4 – 35</td></tr>
+        <tr><td><span class="sw" style="background:var(--clean)"></span>propre</td><td>0,62 – 3,21</td><td>111 – 1219</td></tr>
+        <tr><td><span class="sw" style="background:var(--noise)"></span>bruit</td><td>7,81 – 16,18</td><td>1563 – 5704</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>Les images floues descendent <em class="term">sous</em> les propres sur le σ de bruit, et c'est logique : un flou gaussien est un passe-bas, il supprime le peu de bruit que l'image contenait. L'estimateur mesure donc aussi le flou, mais dans le mauvais sens pour servir de détecteur — d'où la seconde mesure.</p>
+
+  <h2><span class="num">06</span>Trois limites à connaître</h2>
+
+  <h3>La variance du laplacien dépend de l'exposition</h3>
+  <p>Multiplier une image par un gain <em class="term">k</em> multiplie tous ses gradients par <em class="term">k</em>, donc la variance du laplacien par <em class="term">k²</em>. Assombrir d'un facteur 0,4 divise la mesure par plus de 6. Les images sous-exposées du banc tombent à 30 au p10, sous le seuil de 40 — six d'entre elles étaient nommées « floues ». Corriger l'exposition <strong>avant</strong> la fréquence a suffi à les récupérer toutes.</p>
+  <p>Une parade plus fondamentale existe : normaliser par la variance de l'image, <code>var(Laplacien) / var(gris)</code>. Le gain <em class="term">k²</em> s'annule entre numérateur et dénominateur, et la mesure devient invariante à l'exposition.</p>
+
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>classe</th><th>absolue</th><th>normalisée</th></tr></thead>
+      <tbody>
+        <tr><td><span class="sw" style="background:var(--blur)"></span>flou</td><td>4 – 35</td><td>0,002 – 0,018</td></tr>
+        <tr><td><span class="sw" style="background:var(--clean)"></span>propre</td><td>111 – 1219</td><td>0,057 – 0,547</td></tr>
+        <tr><td>sous-exposé</td><td class="neg">30 – 159</td><td class="pos">0,072 – 0,739</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>En absolu, les sous-exposées chevauchent le flou. En normalisé, plus aucun recouvrement — un facteur 4 de marge. La marge flou/propre, elle, reste identique : la normalisation apporte l'invariance, pas la sensibilité.</p>
+
+  <h3>Un seuil absolu pour une grandeur qui dépend de la scène</h3>
+  <p>Les sources vont de 111 à 1219 en netteté. Une image partant de 635 peut perdre 90&nbsp;% de sa netteté et rester au-dessus du seuil, quand une image partant de 120 se fait attraper en perdant bien moins.</p>
+  <div class="callout">
+    <span class="lbl">cas réel — img_19</span>
+    <p style="font-family:var(--sans); font-size:0.9rem">Source à 635, floutée à <strong>60</strong>, seuil à 40. La netteté a chuté d'un facteur 10, c'est un vrai flou, et il passe inaperçu. Les trois flous manqués du banc sont tous de ce type : 60, 51 et 82.</p>
+  </div>
+
+  <h3>Une dérivée seconde ne distingue pas un détail d'un artefact</h3>
+  <p>Le noyau d'accentuation fait monter la variance du laplacien en créant des halos de <em class="term">ringing</em> autour des contours — d'excellents contours bien francs, du point de vue de la mesure. La mesure monte, le seuil est franchi, et l'image n'a pas été restaurée pour autant.</p>
+  <p>Le SSIM par rapport à l'image source le confirme : <strong>+0,021 sur le flou</strong>, contre +0,152 pour le bruit et +0,421 pour la sous-exposition. C'est du bruit de mesure. Sur cet axe, seule une référence externe juge honnêtement — ce que le banc possède et que le pipeline en production n'aura jamais.</p>
+
+  <h2><span class="num">07</span>Ce que ça a donné</h2>
+  <div class="tablewrap">
+    <table>
+      <thead><tr><th>classe exacte</th><th>avec BRISQUE</th><th>avec les deux mesures</th></tr></thead>
+      <tbody>
+        <tr><td>flou</td><td>17 / 29</td><td class="pos">25 / 29</td></tr>
+        <tr><td>bruit</td><td>18 / 28</td><td class="pos">28 / 28</td></tr>
+        <tr><td>propre</td><td>22 / 29</td><td class="pos">28 / 29</td></tr>
+        <tr><td>sous-exposé</td><td>27 / 28</td><td class="pos">28 / 28</td></tr>
+        <tr><td><strong>total</strong></td><td><strong>151 / 198</strong> — 76 %</td><td class="pos"><strong>185 / 198</strong> — 93 %</td></tr>
+        <tr><td>durée du banc</td><td>877 s</td><td class="pos">42 s</td></tr>
+      </tbody>
+    </table>
+  </div>
+  <p>La réserve qui accompagne ces chiffres : le banc ne contient que du flou gaussien et du bruit gaussien, c'est-à-dire exactement ce que ces deux mesures modélisent. Leur victoire est en partie acquise d'avance. Sur des données réelles — compression, ringing, banding, flou de bougé directionnel — un score global pourrait attraper ce qu'elles ignorent, et le banc est structurellement incapable de le dire.</p>
+
+  <p class="foot">Implémenté dans <code>IQA_frequency.py</code> — <code>f_noise</code>, <code>f_sharpness</code>, <code>f_detect</code>. Journal de recherche complet dans <code>RnD/notes_IQA.txt</code>.</p>
+
+</div>
